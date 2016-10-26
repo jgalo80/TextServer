@@ -9,8 +9,9 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
-import io.netty.handler.codec.http.HttpRequestDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
+import io.netty.handler.codec.http.HttpServerCodec;
+import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import org.slf4j.Logger;
@@ -19,8 +20,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Created by jose on 23/10/16.
  */
-public class Main {
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+public class TextServer {
+    private static final Logger logger = LoggerFactory.getLogger(TextServer.class);
     private static final int PORT = Integer.parseInt(System.getProperty("port", "8080"));
 
     public static void main(String[] args) throws Exception {
@@ -36,25 +37,27 @@ public class Main {
                         @Override
                         public void initChannel(SocketChannel ch) throws Exception {
                             ChannelPipeline p = ch.pipeline();
-                            p.addLast("encoder", new HttpResponseEncoder());
-                            p.addLast("decoder", new HttpRequestDecoder());
+                            p.addLast("httpCodec", new HttpServerCodec());
                             p.addLast("aggregator", new HttpObjectAggregator(65536));
-                            p.addLast("handler", new TextServerHandler());
+                            p.addLast(new WebSocketServerCompressionHandler());
+                            p.addLast(new WebSocketServerProtocolHandler("/websocket", null, true));
+                            p.addLast(new WebSocketLoginHandler());
+                            p.addLast(new WebSocketFrameHandler());
                         }
                     });
 
             // Start the server.
             ChannelFuture f = b.bind(PORT).sync();
-            logger.info("Ticket Symbol Server started");
+            logger.info("Text Server started");
 
             // Wait until the server socket is closed.
             f.channel().closeFuture().sync();
         } finally {
-            logger.info("Ticket Symbol Server shutdown started");
+            logger.info("Text Server shutdown started");
             // Shut down all event loops to terminate all threads.
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
-            logger.info("Ticket Symbol Server shutdown completed");
+            logger.info("Text Server shutdown completed");
         }
     }
 }
