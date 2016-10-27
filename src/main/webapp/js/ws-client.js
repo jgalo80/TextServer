@@ -1,4 +1,4 @@
-var wsUri = "ws://localhost:8080/websocket";
+var wsHostAndPath = "//localhost:8080/websocket";
 var output;
 var user;
 var websocket;
@@ -8,7 +8,8 @@ function init() {
 }
 
 function testWebSocket(user) {
-	websocket = new WebSocket(wsUri);
+    wsScheme = window.location.protocol == "http:" ? "ws:" : "wss:";
+	websocket = new WebSocket(wsScheme + wsHostAndPath);
 	websocket.onopen = function (evt) {
 		onOpen(evt)
 	};

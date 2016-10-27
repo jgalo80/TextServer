@@ -1,4 +1,4 @@
-package net.jgn.server;
+package net.jgn.cliptext.server;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -133,15 +133,15 @@ class NettyHttpFileHandler {
             @Override
             public void operationProgressed(ChannelProgressiveFuture future, long progress, long total) {
                 if (total < 0) { // total unknown
-                    logger.error(future.channel() + " Transfer progress: " + progress);
+                    logger.debug(future.channel() + " Transfer progress: " + progress);
                 } else {
-                    logger.error(future.channel() + " Transfer progress: " + progress + " / " + total);
+                    logger.debug(future.channel() + " Transfer progress: " + progress + " / " + total);
                 }
             }
 
             @Override
             public void operationComplete(ChannelProgressiveFuture future) {
-                logger.error(future.channel() + " Transfer complete.");
+                logger.debug(future.channel() + " Transfer complete.");
             }
         });
 

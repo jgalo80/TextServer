@@ -2,26 +2,28 @@
 <html>
 <head lang="en">
     <meta charset="UTF-8">
-    <title>Stock Ticker WebSocket Example</title>
+    <title>Text WebSocket Client</title>
+
+    <style>
+        p {margin: 0px}
+    </style>
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <!-- inject:js -->
     <script src="/js/ws-client.js"></script>
-    <!-- endinject -->
 </head>
 <body>
 
     <form id="form">
         <input id="user" type="text" size="10">
         <input id="login" type="button" value="Login">
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        <input id="close" type="button" value="Close" onclick="websocket.close()">
         <br/><br/>
         <input id="msg" type="text" size="80">
         <input id="send" type="button" value="Send">
     </form>
     <br/>
 
-    <!-- a href="#" onclick="testWebSocket(); return false;">Start</a -->
-    <a href="#" onclick="websocket.close(); return false;">Close</a>
     <div id="output"></div>
 </body>
 </html>

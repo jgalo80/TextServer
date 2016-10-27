@@ -1,4 +1,4 @@
-package net.jgn.server;
+package net.jgn.cliptext.server;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -84,7 +84,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
+        logger.error("Error en WebSocketLoginHandler", cause);
         ctx.close();
     }
 

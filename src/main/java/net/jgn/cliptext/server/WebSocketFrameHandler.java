@@ -1,4 +1,4 @@
-package net.jgn.server;
+package net.jgn.cliptext.server;
 
 import com.google.gson.Gson;
 import io.netty.channel.ChannelHandlerContext;
@@ -13,7 +13,7 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.util.concurrent.GlobalEventExecutor;
-import net.jgn.server.command.Command;
+import net.jgn.cliptext.server.command.Command;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +47,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
             Set<Cookie> cookies = ServerCookieDecoder.STRICT.decode(handshake.requestHeaders().get(HttpHeaderNames.COOKIE));
             Optional<String> userCookie = cookies.stream()
                     .filter(cookie -> "USER".equals(cookie.name()))
-                    .map(cookie -> cookie.value())
+                    .map(Cookie::value)
                     .findFirst();
             if (userCookie.isPresent()) {
                 user = userCookie.get();
@@ -79,7 +79,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
                     logger.info("received ws frame [{}]", frameText);
                     logger.info("Broadcast to USER_CHANNELS: {}", user);
                     // Manda el texto (payload) al resto de clientes conectados
-                    USER_CHANNELS.get(user).writeAndFlush(new TextWebSocketFrame(command.getPayload()), ChannelMatchers.isNot(ctx.channel()));
+                    USER_CHANNELS.get(user).writeAndFlush(new TextWebSocketFrame(frameText), ChannelMatchers.isNot(ctx.channel()));
                     // Y responde con un ACK al cliente que ha mandado el commando brodcast
                     ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));
                 }
@@ -88,5 +88,11 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
             String message = "unsupported frame type: " + frame.getClass().getName();
             throw new UnsupportedOperationException(message);
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        logger.error("Error en el handler", cause);
+        super.exceptionCaught(ctx, cause);
     }
 }
