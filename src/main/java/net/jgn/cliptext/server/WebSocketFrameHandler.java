@@ -68,6 +68,8 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
         if (frame instanceof TextWebSocketFrame) {
             String frameText = ((TextWebSocketFrame) frame).text();
+            logger.info("received ws frame [{}]", frameText);
+
             Command command = gson.fromJson(frameText, Command.class);
             if (command == null) {
                 logger.error("Command not recognized: {}", frameText);
@@ -76,11 +78,15 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
                     logger.warn("User not logged!!");
 
                 } else if ("BROADCAST_MESSAGE".equals(command.getCommand())) {
-                    logger.info("received ws frame [{}]", frameText);
                     logger.info("Broadcast to USER_CHANNELS: {}", user);
                     // Manda el texto (payload) al resto de clientes conectados
                     USER_CHANNELS.get(user).writeAndFlush(new TextWebSocketFrame(frameText), ChannelMatchers.isNot(ctx.channel()));
                     // Y responde con un ACK al cliente que ha mandado el commando brodcast
+                    ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));
+
+                } else if ("STATUS".equals(command.getCommand())) {
+                    logger.info("Status: {}", user);
+
                     ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));
                 }
             }

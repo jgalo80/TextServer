@@ -1,5 +1,6 @@
 package net.jgn.cliptext.server.client;
 
+import com.google.gson.Gson;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
@@ -24,10 +25,12 @@ import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketCl
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import net.jgn.cliptext.server.command.Command;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.util.Date;
 
 /**
  * This is an example of a WebSocket client.
@@ -78,6 +81,7 @@ public final class WebSocketClient {
         }
 
         EventLoopGroup group = new NioEventLoopGroup();
+        Gson gson = new Gson();
         try {
             DefaultHttpHeaders customHeaders = new DefaultHttpHeaders();
             customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", "jose"));
@@ -123,6 +127,17 @@ public final class WebSocketClient {
                 } else if ("ping".equals(msg.toLowerCase())) {
                     WebSocketFrame frame = new PingWebSocketFrame(Unpooled.wrappedBuffer(new byte[] { 8, 1, 8, 1 }));
                     ch.writeAndFlush(frame);
+                } else if (msg.toLowerCase().startsWith("msg")) {
+                    String textMessage = msg.substring(3).trim();
+                    Command msgCommand = Command.create()
+                            .command("BROADCAST_MESSAGE")
+                            .payload(textMessage)
+                            .date(new Date())
+                            .user("jose")
+                            .build();
+                    WebSocketFrame frame = new TextWebSocketFrame(gson.toJson(msgCommand));
+                    ch.writeAndFlush(frame);
+
                 } else {
                     WebSocketFrame frame = new TextWebSocketFrame(msg);
                     ch.writeAndFlush(frame);

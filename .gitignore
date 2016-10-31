@@ -13,4 +13,5 @@
 hs_err_pid*
 
 # Directorio idea
-.idea
+.idea/
+target/

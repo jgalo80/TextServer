@@ -8,6 +8,7 @@ import java.util.Date;
 public class Command {
 
     public static Command ACK_COMMAND = Command.create().command("ACK").build();
+    public static Command STATUS_COMMAND = Command.create().command("STATUS").build();
 
     private String command;
     private String user;
@@ -22,7 +23,7 @@ public class Command {
         return new Builder();
     }
 
-    private static class Builder {
+    public static class Builder {
         private Command c;
         private Builder() {
             c = new Command();
