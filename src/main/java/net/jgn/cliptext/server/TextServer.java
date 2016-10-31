@@ -15,29 +15,28 @@ import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketSe
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.util.SelfSignedCertificate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Created by jose on 23/10/16.
+ * Websocket server
+ *
+ * @author jgalo
  */
 public class TextServer {
+
     private static final Logger logger = LoggerFactory.getLogger(TextServer.class);
 
     private static final boolean SSL = System.getProperty("SSL") != null;
-    private static final int PORT = Integer.parseInt(System.getProperty("port", SSL? "8443" : "8080"));
 
+    /**
+     * Main
+     * @param args
+     * @throws Exception
+     */
     public static void main(String[] args) throws Exception {
         // Configure SSL.
-        final SslContext sslCtx;
-        if (SSL) {
-            SelfSignedCertificate ssc = new SelfSignedCertificate();
-            sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
-        } else {
-            sslCtx = null;
-        }
+        final SslContext sslCtx = SSL ? SslContextCreator.createContext() : null;
 
         // Configure the server.
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -64,7 +63,7 @@ public class TextServer {
                     });
 
             // Start the server.
-            ChannelFuture f = b.bind("localhost", PORT).sync();
+            ChannelFuture f = b.bind("localhost", SSL? 443 : 80).sync();
             logger.info("Text Server started");
 
             // Wait until the server socket is closed.
