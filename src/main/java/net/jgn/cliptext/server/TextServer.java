@@ -35,6 +35,9 @@ public class TextServer {
      * @throws Exception
      */
     public static void main(String[] args) throws Exception {
+
+        String host = args.length >= 1 ? args[0] : "localhost";
+
         // Configure SSL.
         final SslContext sslCtx = SSL ? SslContextCreator.createContext() : null;
 
@@ -63,8 +66,8 @@ public class TextServer {
                     });
 
             // Start the server.
-            ChannelFuture f = b.bind("localhost", SSL? 443 : 80).sync();
-            logger.info("Text Server started");
+            ChannelFuture f = b.bind(host, SSL? 8443 : 80).sync();
+            logger.info("Text Server started on {}:{}", host, SSL? 8443 : 80);
 
             // Wait until the server socket is closed.
             f.channel().closeFuture().sync();
