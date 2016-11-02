@@ -36,10 +36,11 @@ public class TextServer {
      */
     public static void main(String[] args) throws Exception {
 
-        String host = args.length >= 1 ? args[0] : "localhost";
-
         // Configure SSL.
         final SslContext sslCtx = SSL ? SslContextCreator.createContext() : null;
+
+        String host = args.length > 0 ? args[0] : "localhost";
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : (SSL ? 443 : 80);
 
         // Configure the server.
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -66,8 +67,8 @@ public class TextServer {
                     });
 
             // Start the server.
-            ChannelFuture f = b.bind(host, SSL? 8443 : 80).sync();
-            logger.info("Text Server started on {}:{}", host, SSL? 8443 : 80);
+            ChannelFuture f = b.bind(host, port).sync();
+            logger.info("Text Server started on {}:{}", host, port);
 
             // Wait until the server socket is closed.
             f.channel().closeFuture().sync();

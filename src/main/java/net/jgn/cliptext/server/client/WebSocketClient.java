@@ -24,9 +24,9 @@ import io.netty.handler.codec.http.websocketx.WebSocketVersion;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import net.jgn.cliptext.server.command.Command;
 
+import javax.net.ssl.TrustManagerFactory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -47,44 +47,53 @@ import java.util.Date;
  */
 public final class WebSocketClient {
 
-    static final String URL = System.getProperty("url", "wss://localhost:8443/websocket");
+    private static final String ISRG_ROOT_X1_FINGERPRINT = "CA:BD:2A:79:A1:07:6A:31:F2:1D:25:36:35:CB:03:9D:43:29:A5:E8";
+    private static final String LETSENCRYPT_AUTH_X3_FINGERPRINT = "E6:A3:B4:5B:06:2D:50:9B:33:82:28:2D:19:6E:FE:97:D5:95:6C:CB";
+    private static final String LETSENCRYPT_AUTH_X4_FINGERPRINT = "C0:5E:24:71:E5:89:A5:70:53:F2:74:7E:E0:6A:59:3C:51:3E:23:A5";
 
+    /**
+     * Main
+     * @param args
+     * @throws Exception
+     */
     public static void main(String[] args) throws Exception {
-        URI uri = new URI(URL);
-        String scheme = uri.getScheme() == null? "ws" : uri.getScheme();
-        final String host = uri.getHost() == null? "localhost" : uri.getHost();
-        final int port;
-        if (uri.getPort() == -1) {
-            if ("ws".equalsIgnoreCase(scheme)) {
-                port = 8080;
-            } else if ("wss".equalsIgnoreCase(scheme)) {
-                port = 8443;
-            } else {
-                port = -1;
-            }
-        } else {
-            port = uri.getPort();
+        if (args.length < 2) {
+            System.err.println("URL and certDN are required.");
+            System.err.println("Usage: WebSocketClient <URL> <certDN> [user]");
+            System.exit(1);
         }
+        String url = args[0];
+        String certDN = args[1];
+        String user = args.length > 2 ? args[2] : "nouser";
+
+        URI uri = new URI(url);
+        String scheme = uri.getScheme();
 
         if (!"ws".equalsIgnoreCase(scheme) && !"wss".equalsIgnoreCase(scheme)) {
             System.err.println("Only WS(S) is supported.");
-            return;
+            System.exit(2);
         }
 
         final boolean ssl = "wss".equalsIgnoreCase(scheme);
         final SslContext sslCtx;
+        final int port;
         if (ssl) {
-            sslCtx = SslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE).build();
+            TrustManagerFactory trustManagerFactory = new CAFingerprintTrustManagerFactory(certDN,
+                    LETSENCRYPT_AUTH_X3_FINGERPRINT,
+                    LETSENCRYPT_AUTH_X4_FINGERPRINT,
+                    ISRG_ROOT_X1_FINGERPRINT);
+            sslCtx = SslContextBuilder.forClient().trustManager(trustManagerFactory).build();
+            port = 443;
         } else {
             sslCtx = null;
+            port = 80;
         }
 
         EventLoopGroup group = new NioEventLoopGroup();
         Gson gson = new Gson();
         try {
             DefaultHttpHeaders customHeaders = new DefaultHttpHeaders();
-            customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", "jose"));
+            customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", user));
 
             // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
             // If you change it to V00, ping is not supported and remember to change
@@ -102,7 +111,7 @@ public final class WebSocketClient {
                         protected void initChannel(SocketChannel ch) {
                             ChannelPipeline p = ch.pipeline();
                             if (sslCtx != null) {
-                                p.addLast(sslCtx.newHandler(ch.alloc(), host, port));
+                                p.addLast(sslCtx.newHandler(ch.alloc(), uri.getHost(), port));
                             }
                             p.addLast(
                                     new HttpClientCodec(),
@@ -133,7 +142,7 @@ public final class WebSocketClient {
                             .command("BROADCAST_MESSAGE")
                             .payload(textMessage)
                             .date(new Date())
-                            .user("jose")
+                            .user(user)
                             .build();
                     WebSocketFrame frame = new TextWebSocketFrame(gson.toJson(msgCommand));
                     ch.writeAndFlush(frame);

@@ -44,19 +44,22 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
             logger.info("Handshake completed. Adding channel to ALL_CHANNELS");
             ALL_CHANNELS.add(ctx.channel());
 
-            Set<Cookie> cookies = ServerCookieDecoder.STRICT.decode(handshake.requestHeaders().get(HttpHeaderNames.COOKIE));
-            Optional<String> userCookie = cookies.stream()
-                    .filter(cookie -> "USER".equals(cookie.name()))
-                    .map(Cookie::value)
-                    .findFirst();
-            if (userCookie.isPresent()) {
-                user = userCookie.get();
-                ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
-                if (cg == null) {
-                    cg = USER_CHANNELS.get(user);
+            String cookieHeader = handshake.requestHeaders().get(HttpHeaderNames.COOKIE);
+            if (cookieHeader != null) {
+                Set<Cookie> cookies = ServerCookieDecoder.STRICT.decode(cookieHeader);
+                Optional<String> userCookie = cookies.stream()
+                        .filter(cookie -> "USER".equals(cookie.name()))
+                        .map(Cookie::value)
+                        .findFirst();
+                if (userCookie.isPresent()) {
+                    user = userCookie.get();
+                    ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
+                    if (cg == null) {
+                        cg = USER_CHANNELS.get(user);
+                    }
+                    cg.add(ctx.channel());
+                    logger.info("Handshake completed. Adding channel to USER_CHANNELS[{}]", user);
                 }
-                cg.add(ctx.channel());
-                logger.info("Handshake completed. Adding channel to USER_CHANNELS[{}]", user);
             }
         }
         super.userEventTriggered(ctx, evt);
