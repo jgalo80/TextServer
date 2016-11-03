@@ -2,17 +2,31 @@ package net.jgn.cliptext.server;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.*;
-import io.netty.handler.codec.http.*;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
+import io.netty.handler.codec.http.FullHttpRequest;
+import io.netty.handler.codec.http.FullHttpResponse;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpUtil;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.cookie.DefaultCookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.netty.handler.codec.http.multipart.Attribute;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
-import io.netty.handler.ssl.SslHandler;
 import io.netty.util.CharsetUtil;
+import net.jgn.cliptext.crypt.BCrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -25,6 +39,8 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
 
     private static final Logger logger = LoggerFactory.getLogger(WebSocketLoginHandler.class);
     private NettyHttpFileHandler httpFileHandler = new NettyHttpFileHandler();
+
+    private static final Map<String, String> USER_MAP = new ConcurrentHashMap<>();
 
     public WebSocketLoginHandler() {
     }
@@ -40,21 +56,10 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         // If you're going to do normal HTTP POST authentication before upgrading the
         // WebSocket, the recommendation is to handle it right here
         if (req.method() == HttpMethod.POST) {
-            HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(req);
-            InterfaceHttpData userData = decoder.getBodyHttpData("user");
-            if (userData != null && userData.getHttpDataType().equals(InterfaceHttpData.HttpDataType.Attribute)) {
-                Attribute userAttr = (Attribute) userData;
-                String loginUser = userAttr.getValue();
-                logger.info("handleHttpRequest (POST): usuario " + loginUser);
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-                DefaultCookie userCookie = new DefaultCookie("USER", loginUser);
-                response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(userCookie));
-
-                // Close the connection as soon as the error message is sent.
-                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-
-            } else {
-                httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+            if (req.uri().equals("/register")) {
+                signup(ctx, req);
+            } else if (req.uri().equals("/login")) {
+                login(ctx, req);
             }
             return;
         }
@@ -80,6 +85,85 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             logger.info("Not found: {}", req.uri());
             sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND));
         }
+    }
+
+    /**
+     * Register the user in the system
+     * @param ctx
+     * @param req
+     * @throws IOException
+     */
+    private void signup(ChannelHandlerContext ctx, FullHttpRequest req) throws IOException {
+        HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(req);
+        String loginUser = getPostAttribute(decoder, "user");
+        String password = getPostAttribute(decoder, "passwd");
+        decoder.destroy();
+
+        if (loginUser != null && password != null) {
+            logger.info("[/signup] Registering user: {}", loginUser);
+            if (USER_MAP.containsKey(loginUser)) {
+                logger.warn("[/signup] user {} already registered. ", loginUser);
+            } else {
+                String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
+                logger.debug("[/signup] user {}, hashed password: {}", loginUser, hashedPassword);
+                USER_MAP.put(loginUser, hashedPassword);
+            }
+            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+            // Close the connection as soon as the error message is sent.
+            ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+
+        } else {
+            httpFileHandler.sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Manages user login
+     * @param ctx
+     * @param req
+     * @throws IOException
+     */
+    private void login(ChannelHandlerContext ctx, FullHttpRequest req) throws IOException {
+        HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(req);
+        String loginUser = getPostAttribute(decoder, "user");
+        String password = getPostAttribute(decoder, "passwd");
+        decoder.destroy();
+
+        if (loginUser != null && password != null) {
+            logger.info("[/login] Authenticating user: {}", loginUser);
+            String hashpw = USER_MAP.get(loginUser);
+            if (hashpw == null) {
+                logger.error("[/login] User not registered: {}", loginUser);
+                httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+
+            } else {
+                if (BCrypt.checkpw(password, hashpw)) {
+                    logger.info("[/login] User logged in: {}", loginUser);
+                    FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+                    DefaultCookie userCookie = new DefaultCookie("USER", loginUser);
+                    response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(userCookie));
+
+                    // Close the connection as soon as the error message is sent.
+                    ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+                } else {
+                    logger.error("[/login] Hash password doesn't match for user: {}", loginUser);
+                    httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                }
+            }
+        } else {
+            logger.error("[/login] User and/or password not provided");
+            httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+        }
+    }
+
+    private String getPostAttribute(HttpPostRequestDecoder decoder, String attrName) throws IOException {
+        String attrValue = null;
+        InterfaceHttpData bodyHttpData = decoder.getBodyHttpData(attrName);
+        if (bodyHttpData != null && bodyHttpData.getHttpDataType().equals(InterfaceHttpData.HttpDataType.Attribute)) {
+            Attribute attrData = (Attribute) bodyHttpData;
+            attrValue = attrData.getValue();
+        }
+        return attrValue;
     }
 
     @Override

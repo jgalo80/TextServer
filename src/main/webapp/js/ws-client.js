@@ -69,15 +69,27 @@ function writeToScreen(message) {
 window.addEventListener("load", init, false);
 
 $(document).ready(function(){
+    $("#register").click(function() {
+        console.log("Registrando usuario: " + $("#user").val());
+        $.ajax({
+            url: "/register",
+            type: "POST",
+            data: {user: $("#user").val(), passwd: $("#passwd").val()},
+            success: function(result) {
+                user = $("#user").val();
+                writeToScreen("REGISTERED user " + user);
+            }
+        });
+    });
     $("#login").click(function() {
         console.log("Usuario: " + $("#user").val());
         $.ajax({
             url: "/login",
             type: "POST",
-            data: {user: $("#user").val()},
+            data: {user: $("#user").val(), passwd: $("#passwd").val()},
             success: function(result) {
                 user = $("#user").val();
-                writeToScreen("LOGGED IN");
+                writeToScreen("LOGGED IN " + user);
                 testWebSocket();
             }
         });

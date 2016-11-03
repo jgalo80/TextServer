@@ -15,6 +15,8 @@ import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketSe
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,9 +26,9 @@ import org.slf4j.LoggerFactory;
  *
  * @author jgalo
  */
-public class TextServer {
+public class TextServerSslSelfSigned {
 
-    private static final Logger logger = LoggerFactory.getLogger(TextServer.class);
+    private static final Logger logger = LoggerFactory.getLogger(TextServerSslSelfSigned.class);
 
     private static final boolean SSL = System.getProperty("SSL") != null;
 
@@ -38,10 +40,11 @@ public class TextServer {
     public static void main(String[] args) throws Exception {
 
         // Configure SSL.
-        final SslContext sslCtx = SSL ? SslContextCreator.createContext() : null;
+        SelfSignedCertificate ssc = new SelfSignedCertificate();
+        SslContext sslCtx = SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build();
 
-        String host = args.length > 0 ? args[0] : "localhost";
-        int port = args.length > 1 ? Integer.parseInt(args[1]) : (SSL ? 443 : 80);
+        String host = "localhost";
+        int port = 8443;
 
         // Configure the server.
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
@@ -55,9 +58,7 @@ public class TextServer {
                         @Override
                         public void initChannel(SocketChannel ch) throws Exception {
                             ChannelPipeline p = ch.pipeline();
-                            if (sslCtx != null) {
-                                p.addLast(sslCtx.newHandler(ch.alloc()));
-                            }
+                            p.addLast(sslCtx.newHandler(ch.alloc()));
                             p.addLast(new HttpServerCodec());
                             p.addLast(new HttpObjectAggregator(262144));
                             p.addLast(new ChunkedWriteHandler());
