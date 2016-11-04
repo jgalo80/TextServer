@@ -2,20 +2,12 @@ package net.jgn.cliptext.server;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.http.HttpObjectAggregator;
-import io.netty.handler.codec.http.HttpServerCodec;
-import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.stream.ChunkedWriteHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,22 +43,7 @@ public class TextServer {
             b.group(bossGroup, workerGroup)
                     .channel(NioServerSocketChannel.class)
                     .handler(new LoggingHandler(LogLevel.INFO))
-                    .childHandler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        public void initChannel(SocketChannel ch) throws Exception {
-                            ChannelPipeline p = ch.pipeline();
-                            if (sslCtx != null) {
-                                p.addLast(sslCtx.newHandler(ch.alloc()));
-                            }
-                            p.addLast(new HttpServerCodec());
-                            p.addLast(new HttpObjectAggregator(262144));
-                            p.addLast(new ChunkedWriteHandler());
-                            p.addLast(new WebSocketServerCompressionHandler());
-                            p.addLast(new WebSocketServerProtocolHandler("/websocket", null, true));
-                            p.addLast(new WebSocketLoginHandler());
-                            p.addLast(new WebSocketFrameHandler());
-                        }
-                    });
+                    .childHandler(new TextServerInitializer(sslCtx, "/websocket"));
 
             // Start the server.
             ChannelFuture f = b.bind(host, port).sync();

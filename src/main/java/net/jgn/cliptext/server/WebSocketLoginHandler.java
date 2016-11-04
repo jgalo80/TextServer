@@ -20,7 +20,8 @@ import io.netty.handler.codec.http.multipart.Attribute;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.util.CharsetUtil;
-import net.jgn.cliptext.crypt.BCrypt;
+import net.jgn.cliptext.crypt.PasswordHasher;
+import net.jgn.cliptext.crypt.SHA1PasswordHasher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +42,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     private NettyHttpFileHandler httpFileHandler = new NettyHttpFileHandler();
 
     private static final Map<String, String> USER_MAP = new ConcurrentHashMap<>();
+    private PasswordHasher passwordHasher = new SHA1PasswordHasher();
 
     public WebSocketLoginHandler() {
     }
@@ -104,7 +106,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             if (USER_MAP.containsKey(loginUser)) {
                 logger.warn("[/signup] user {} already registered. ", loginUser);
             } else {
-                String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
+                String hashedPassword = passwordHasher.hashPassword(password, passwordHasher.generateSalt());
                 logger.debug("[/signup] user {}, hashed password: {}", loginUser, hashedPassword);
                 USER_MAP.put(loginUser, hashedPassword);
             }
@@ -137,7 +139,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
                 httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
 
             } else {
-                if (BCrypt.checkpw(password, hashpw)) {
+                if (passwordHasher.checkPassword(password, hashpw)) {
                     logger.info("[/login] User logged in: {}", loginUser);
                     FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
                     DefaultCookie userCookie = new DefaultCookie("USER", loginUser);
