@@ -1,4 +1,4 @@
-package net.jgn.cliptext.server.client;
+package net.jgn.cliptext.client;
 
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;

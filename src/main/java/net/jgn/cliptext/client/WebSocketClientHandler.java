@@ -1,4 +1,4 @@
-package net.jgn.cliptext.server.client;
+package net.jgn.cliptext.client;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;

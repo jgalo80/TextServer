@@ -8,8 +8,11 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
+import net.jgn.cliptext.cfg.ServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
  * Websocket server
@@ -28,6 +31,8 @@ public class TextServer {
      * @throws Exception
      */
     public static void main(String[] args) throws Exception {
+
+
 
         // Configure SSL.
         final SslContext sslCtx = SSL ? SslContextCreator.createContext() : null;

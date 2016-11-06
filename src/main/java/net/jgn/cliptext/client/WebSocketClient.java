@@ -1,4 +1,4 @@
-package net.jgn.cliptext.server.client;
+package net.jgn.cliptext.client;
 
 import com.google.gson.Gson;
 import io.netty.bootstrap.Bootstrap;

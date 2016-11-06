@@ -105,7 +105,6 @@ class NettyHttpFileHandler {
         }
 
         // Cache Validation
-/*
         String ifModifiedSince = req.headers().get(HttpHeaderNames.IF_MODIFIED_SINCE);
         if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
             SimpleDateFormat dateFormatter = new SimpleDateFormat(HTTP_DATE_FORMAT, Locale.US);
@@ -120,7 +119,6 @@ class NettyHttpFileHandler {
                 return;
             }
         }
-*/
 
         RandomAccessFile raf;
         try {

@@ -9,6 +9,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import org.springframework.stereotype.Component;
 
 /**
  * @author jose
@@ -18,13 +19,14 @@ public class TextServerInitializer extends ChannelInitializer<SocketChannel> {
     private final SslContext sslContext;
     private final String websocketPath;
 
-    TextServerInitializer(SslContext sslContext, String websocketPath) {
+    public TextServerInitializer(SslContext sslContext, String websocketPath) {
         this.sslContext = sslContext;
         this.websocketPath = websocketPath;
     }
 
     @Override
     public void initChannel(SocketChannel ch) throws Exception {
+        System.out.println(" --------------- Inicializando canal..... ----------------------");
         ChannelPipeline p = ch.pipeline();
         if (sslContext != null) {
             p.addLast(sslContext.newHandler(ch.alloc()));
