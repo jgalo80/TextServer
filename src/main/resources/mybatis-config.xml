@@ -13,17 +13,16 @@
         <environment id="development">
             <transactionManager type="JDBC" />
             <dataSource type="POOLED">
-                <property userName="driver" value="org.apache.derby.jdbc.EmbeddedDriver" />
-                <property userName="url"
-                          value="jdbc:derby:dbUsers;create=true;user=me;password=me" />
-                <property userName="username" value="me" />
-                <property userName="password" value="me" />
+                <property name="driver" value="org.apache.derby.jdbc.EmbeddedDriver" />
+                <property name="url" value="jdbc:derby:db/dbUsers;create=true;user=me;password=me" />
+                <property name="username" value="me" />
+                <property name="password" value="me" />
             </dataSource>
         </environment>
     </environments>
 
     <mappers>
-        <mapper resource="user-mapper.xml" />
+        <mapper class="net.jgn.cliptext.server.repo.UserRepository"/>
     </mappers>
 
 </configuration>

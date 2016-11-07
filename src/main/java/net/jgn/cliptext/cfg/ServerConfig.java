@@ -20,6 +20,7 @@ import java.security.cert.CertificateException;
  */
 @Configuration
 @ComponentScan(value = "net.jgn.cliptext.server")
+@Import(DbConfig.class)
 @PropertySource("classpath:server.properties")
 public class ServerConfig {
 

@@ -26,6 +26,9 @@ public class Main {
             port = 8443;
         }
 
+        UserDbInit userDbInit = context.getBean(UserDbInit.class);
+        userDbInit.createDbIfNotExists();
+
         ClipTextServer server = context.getBean(ClipTextServer.class);
         Channel channel = server.start(host, port);
 
