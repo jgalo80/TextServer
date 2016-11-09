@@ -1,9 +1,7 @@
 package net.jgn.cliptext.server.repo;
 
 import net.jgn.cliptext.server.user.User;
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.*;
 
 /**
  * @author jose
@@ -30,6 +28,8 @@ public interface UserRepository {
     @Update("CREATE UNIQUE INDEX UI_APP_USER_USERNAME on APP_USER (USER_NAME)")
     void createUserNameIndex();
 
-    @Insert("INSERT INTO APP_USER (user_name, hash_password) VALUES (#{userName}, #{hashPassword})")
-    void insertUser(String userName, String hashPassword);
+    @Insert("INSERT INTO APP_USER (USER_NAME, HASH_PASSWORD) VALUES (#{userName}, #{hashPassword})")
+    //@Options(useGeneratedKeys=true, keyColumn="id")
+    @SelectKey(statement = "values IDENTITY_VAL_LOCAL()", keyProperty = "id", resultType=Integer.class, before = false)
+    void insertUser(User user);
 }

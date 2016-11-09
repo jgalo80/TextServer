@@ -7,12 +7,16 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import net.jgn.cliptext.server.SslContextCreator;
 import net.jgn.cliptext.server.SslContextWrapper;
 import net.jgn.cliptext.server.TextServerInitializer;
+import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
 import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.core.env.Environment;
 
 import javax.net.ssl.SSLException;
+import java.io.IOException;
 import java.security.cert.CertificateException;
 
 /**
@@ -26,6 +30,9 @@ public class ServerConfig {
 
     @Autowired
     private Environment env;
+
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
 
     @Bean
     public static PropertySourcesPlaceholderConfigurer propertyPlaceholderConfigurer() {
@@ -59,7 +66,10 @@ public class ServerConfig {
     }
 
     @Bean
-    public TextServerInitializer textServerInitializer() throws SSLException, CertificateException {
-        return new TextServerInitializer(sslCtxWrapper().getSslContext(), env.getProperty("websocketPath"));
+    public TextServerInitializer textServerInitializer() throws IOException, CertificateException {
+        return new TextServerInitializer(sqlSessionFactory,
+                sslCtxWrapper().getSslContext(),
+                env.getProperty("websocketPath"));
     }
+
 }

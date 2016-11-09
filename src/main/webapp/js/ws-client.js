@@ -9,7 +9,8 @@ function init() {
 
 function testWebSocket(user) {
     wsScheme = window.location.protocol == "http:" ? "ws:" : "wss:";
-    wsUri = wsScheme + "//" + window.location.host + ":" + window.location.port + wsPath;
+    wsUri = wsScheme + "//" + window.location.host + wsPath;
+    writeToScreen("Conecting to " + wsUri + "...");
 	websocket = new WebSocket(wsUri);
 	websocket.onopen = function (evt) {
 		onOpen(evt)

@@ -22,6 +22,10 @@ import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 import io.netty.util.CharsetUtil;
 import net.jgn.cliptext.crypt.PasswordHasher;
 import net.jgn.cliptext.crypt.SHA1PasswordHasher;
+import net.jgn.cliptext.server.repo.UserRepository;
+import net.jgn.cliptext.server.user.User;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,10 +45,12 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     private static final Logger logger = LoggerFactory.getLogger(WebSocketLoginHandler.class);
     private NettyHttpFileHandler httpFileHandler = new NettyHttpFileHandler();
 
-    private static final Map<String, String> USER_MAP = new ConcurrentHashMap<>();
     private PasswordHasher passwordHasher = new SHA1PasswordHasher();
 
-    public WebSocketLoginHandler() {
+    private final SqlSessionFactory sqlSessionFactory;
+
+    public WebSocketLoginHandler(SqlSessionFactory sqlSessionFactory) {
+        this.sqlSessionFactory = sqlSessionFactory;
     }
 
     @Override
@@ -103,12 +109,12 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
 
         if (loginUser != null && password != null) {
             logger.info("[/signup] Registering user: {}", loginUser);
-            if (USER_MAP.containsKey(loginUser)) {
+            if (retrieveUser(loginUser) != null) {
                 logger.warn("[/signup] user {} already registered. ", loginUser);
             } else {
                 String hashedPassword = passwordHasher.hashPassword(password, passwordHasher.generateSalt());
                 logger.debug("[/signup] user {}, hashed password: {}", loginUser, hashedPassword);
-                USER_MAP.put(loginUser, hashedPassword);
+                storeUser(loginUser, hashedPassword);
             }
             FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
             // Close the connection as soon as the error message is sent.
@@ -133,13 +139,13 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
 
         if (loginUser != null && password != null) {
             logger.info("[/login] Authenticating user: {}", loginUser);
-            String hashpw = USER_MAP.get(loginUser);
-            if (hashpw == null) {
+            User user = retrieveUser(loginUser);
+            if (user == null) {
                 logger.error("[/login] User not registered: {}", loginUser);
                 httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
 
             } else {
-                if (passwordHasher.checkPassword(password, hashpw)) {
+                if (passwordHasher.checkPassword(password, user.getHashPassword())) {
                     logger.info("[/login] User logged in: {}", loginUser);
                     FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
                     DefaultCookie userCookie = new DefaultCookie("USER", loginUser);
@@ -148,7 +154,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
                     // Close the connection as soon as the error message is sent.
                     ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
                 } else {
-                    logger.error("[/login] Hash password doesn't match for user: {}", loginUser);
+                    logger.error("[/login] Hash password doesn't match for user: {} - {}", loginUser, user.getHashPassword());
                     httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
                 }
             }
@@ -166,6 +172,30 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             attrValue = attrData.getValue();
         }
         return attrValue;
+    }
+
+    private User retrieveUser(String userName) {
+        SqlSession session = sqlSessionFactory.openSession(true);
+        UserRepository userRepository;
+        try {
+            userRepository = session.getMapper(UserRepository.class);
+            return userRepository.selectByUserName(userName);
+        } finally {
+            session.close();
+        }
+    }
+
+    private User storeUser(String userName, String hashPassword) {
+        SqlSession session = sqlSessionFactory.openSession(true);
+        UserRepository userRepository;
+        User user = new User(userName, hashPassword);
+        try {
+            userRepository = session.getMapper(UserRepository.class);
+            userRepository.insertUser(user);
+        } finally {
+            session.close();
+        }
+        return user;
     }
 
     @Override

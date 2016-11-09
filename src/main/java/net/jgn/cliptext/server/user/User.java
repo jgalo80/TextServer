@@ -8,6 +8,14 @@ public class User {
     private String userName;
     private String hashPassword;
 
+    public User() {
+    }
+
+    public User(String userName, String hashPassword) {
+        this.userName = userName;
+        this.hashPassword = hashPassword;
+    }
+
     public int getId() {
         return id;
     }
@@ -30,5 +38,14 @@ public class User {
 
     public void setHashPassword(String hashPassword) {
         this.hashPassword = hashPassword;
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", userName='" + userName + '\'' +
+                ", hashPassword='" + hashPassword + '\'' +
+                '}';
     }
 }

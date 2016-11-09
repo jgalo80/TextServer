@@ -9,6 +9,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,15 +19,16 @@ public class TextServerInitializer extends ChannelInitializer<SocketChannel> {
 
     private final SslContext sslContext;
     private final String websocketPath;
+    private final SqlSessionFactory sqlSessionFactory;
 
-    public TextServerInitializer(SslContext sslContext, String websocketPath) {
+    public TextServerInitializer(SqlSessionFactory sqlSessionFactory, SslContext sslContext, String websocketPath) {
         this.sslContext = sslContext;
         this.websocketPath = websocketPath;
+        this.sqlSessionFactory = sqlSessionFactory;
     }
 
     @Override
     public void initChannel(SocketChannel ch) throws Exception {
-        System.out.println(" --------------- Inicializando canal..... ----------------------");
         ChannelPipeline p = ch.pipeline();
         if (sslContext != null) {
             p.addLast(sslContext.newHandler(ch.alloc()));
@@ -35,8 +37,8 @@ public class TextServerInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(new HttpObjectAggregator(262144));
         p.addLast(new ChunkedWriteHandler());
         p.addLast(new WebSocketServerCompressionHandler());
-        p.addLast(new WebSocketServerProtocolHandler("/websocket", null, true));
-        p.addLast(new WebSocketLoginHandler());
+        p.addLast(new WebSocketServerProtocolHandler(websocketPath, null, true));
+        p.addLast(new WebSocketLoginHandler(sqlSessionFactory));
         p.addLast(new WebSocketFrameHandler());
     }
 
