@@ -57,14 +57,13 @@ public final class WebSocketClient {
      * @throws Exception
      */
     public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("URL and certDN are required.");
-            System.err.println("Usage: WebSocketClient <URL> <certDN> [user]");
+        if (args.length < 1) {
+            System.err.println("URL is required.");
+            System.err.println("Usage: WebSocketClient <URL> [user]");
             System.exit(1);
         }
         String url = args[0];
-        String certDN = args[1];
-        String user = args.length > 2 ? args[2] : "nouser";
+        String user = args.length > 1 ? args[1] : "guest";
 
         URI uri = new URI(url);
         String scheme = uri.getScheme();
@@ -75,18 +74,17 @@ public final class WebSocketClient {
         }
 
         final boolean ssl = "wss".equalsIgnoreCase(scheme);
+        final int port = uri.getPort() == -1 ? (ssl ? 443 : 80) : uri.getPort();
         final SslContext sslCtx;
-        final int port;
         if (ssl) {
+            String certDN = System.getProperty("certDN");
             TrustManagerFactory trustManagerFactory = new CAFingerprintTrustManagerFactory(certDN,
                     LETSENCRYPT_AUTH_X3_FINGERPRINT,
                     LETSENCRYPT_AUTH_X4_FINGERPRINT,
                     ISRG_ROOT_X1_FINGERPRINT);
             sslCtx = SslContextBuilder.forClient().trustManager(trustManagerFactory).build();
-            port = 443;
         } else {
             sslCtx = null;
-            port = 80;
         }
 
         EventLoopGroup group = new NioEventLoopGroup();
@@ -121,6 +119,7 @@ public final class WebSocketClient {
                         }
                     });
 
+            System.out.println("Connecting to " + uri);
             Channel ch = b.connect(uri.getHost(), port).sync().channel();
             handler.handshakeFuture().sync();
 
@@ -139,7 +138,17 @@ public final class WebSocketClient {
                 } else if (msg.toLowerCase().startsWith("msg")) {
                     String textMessage = msg.substring(3).trim();
                     Command msgCommand = Command.create()
-                            .command("BROADCAST_MESSAGE")
+                            .command(Command.MSG_CMD_NAME)
+                            .payload(textMessage)
+                            .date(new Date())
+                            .user(user)
+                            .build();
+                    WebSocketFrame frame = new TextWebSocketFrame(gson.toJson(msgCommand));
+                    ch.writeAndFlush(frame);
+                } else if (msg.toLowerCase().startsWith("broadcast")) {
+                    String textMessage = msg.substring(9).trim();
+                    Command msgCommand = Command.create()
+                            .command(Command.BROADCAST_CMD_NAME)
                             .payload(textMessage)
                             .date(new Date())
                             .user(user)

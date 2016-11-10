@@ -97,7 +97,12 @@ $(document).ready(function(){
     });
     $("#send").click(function() {
         writeToScreen("Enviando [" + $("#msg").val() + "] ...");
-        var message = '{"command":"BROADCAST_MESSAGE", "payload":"' + $("#msg").val() + '"}';
+        var message = '{"command":"MSG", "payload":"' + $("#msg").val() + '"}';
+        websocket.send(message);
+    });
+    $("#broadcast").click(function() {
+        writeToScreen("Enviando broadcast [" + $("#msg").val() + "] ...");
+        var message = '{"command":"BROADCAST", "payload":"' + $("#msg").val() + '"}';
         websocket.send(message);
     });
 });

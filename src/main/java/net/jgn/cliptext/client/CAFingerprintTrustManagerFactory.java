@@ -6,6 +6,8 @@ import io.netty.handler.ssl.util.SimpleTrustManagerFactory;
 import io.netty.util.concurrent.FastThreadLocal;
 import io.netty.util.internal.EmptyArrays;
 import io.netty.util.internal.InternalThreadLocalMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.TrustManager;
@@ -27,6 +29,8 @@ import java.util.stream.Collectors;
  * @author jose
  */
 public class CAFingerprintTrustManagerFactory extends SimpleTrustManagerFactory {
+
+    private static final Logger logger = LoggerFactory.getLogger(CAFingerprintTrustManagerFactory.class);
 
     private static final Pattern FINGERPRINT_PATTERN = Pattern.compile("^[0-9a-fA-F:]+$");
     private static final Pattern FINGERPRINT_STRIP_PATTERN = Pattern.compile(":");
@@ -81,13 +85,17 @@ public class CAFingerprintTrustManagerFactory extends SimpleTrustManagerFactory 
                     }
 
                 } else {
-                    // validate leaf certificate (my cert)
-                    if (!cert.getSubjectDN().getName().equals(leafCertDn)) {
-                        throw new CertificateException(
-                                type + " certificate not expected ('" + fingerprintNotFoundCerts
-                                + "' <> '" + leafCertDn + "')");
+                    if (leafCertDn != null) {
+                        // validate leaf certificate (my cert)
+                        if (!cert.getSubjectDN().getName().equals(leafCertDn)) {
+                            throw new CertificateException(
+                                    type + " certificate not expected ('" + fingerprintNotFoundCerts
+                                            + "' <> '" + leafCertDn + "')");
+                        }
+                        cert.checkValidity();
+                    } else {
+                        logger.warn("No performing validation over leaf certificate [{}].", cert.getSubjectDN().getName());
                     }
-                    cert.checkValidity();
                 }
             }
 

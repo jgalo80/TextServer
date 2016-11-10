@@ -80,14 +80,21 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
                 if (user == null) {
                     logger.warn("User not logged!!");
 
-                } else if ("BROADCAST_MESSAGE".equals(command.getCommand())) {
-                    logger.info("Broadcast to USER_CHANNELS: {}", user);
-                    // Manda el texto (payload) al resto de clientes conectados
+                } else if (Command.MSG_CMD_NAME.equals(command.getCommand())) {
+                    logger.info("Message to USER_CHANNELS: {}", user);
+                    // Manda el texto (payload) al resto de clientes del mismo grupo
                     USER_CHANNELS.get(user).writeAndFlush(new TextWebSocketFrame(frameText), ChannelMatchers.isNot(ctx.channel()));
                     // Y responde con un ACK al cliente que ha mandado el commando brodcast
                     ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));
 
-                } else if ("STATUS".equals(command.getCommand())) {
+                } else if (Command.BROADCAST_CMD_NAME.equals(command.getCommand())) {
+                    logger.info("Broadcast to ALL_CHANNELS: {}");
+                    // Manda el texto (payload) al resto de clientes conectados
+                    ALL_CHANNELS.writeAndFlush(new TextWebSocketFrame(frameText), ChannelMatchers.isNot(ctx.channel()));
+                    // Y responde con un ACK al cliente que ha mandado el commando brodcast
+                    ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));
+
+                } else if (Command.STATUS_CMD_NAME.equals(command.getCommand())) {
                     logger.info("Status: {}", user);
 
                     ctx.channel().writeAndFlush(new TextWebSocketFrame(gson.toJson(Command.ACK_COMMAND)));

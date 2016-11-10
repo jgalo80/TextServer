@@ -30,8 +30,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -68,6 +66,8 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
                 signup(ctx, req);
             } else if (req.uri().equals("/login")) {
                 login(ctx, req);
+            } else {
+                sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST));
             }
             return;
         }
@@ -93,6 +93,12 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             logger.info("Not found: {}", req.uri());
             sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND));
         }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        logger.error("Error en WebSocketLoginHandler", cause);
+        ctx.close();
     }
 
     /**
@@ -196,12 +202,6 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             session.close();
         }
         return user;
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        logger.error("Error en WebSocketLoginHandler", cause);
-        ctx.close();
     }
 
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {

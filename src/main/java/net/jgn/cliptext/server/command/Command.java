@@ -7,8 +7,13 @@ import java.util.Date;
  */
 public class Command {
 
-    public static Command ACK_COMMAND = Command.create().command("ACK").build();
-    public static Command STATUS_COMMAND = Command.create().command("STATUS").build();
+    public static final String ACK_CMD_NAME = "ACK";
+    public static final String STATUS_CMD_NAME = "STATUS";
+    public static final String BROADCAST_CMD_NAME = "BROADCAST";
+    public static final String MSG_CMD_NAME = "MSG";
+
+    public static final Command ACK_COMMAND = Command.create().command(ACK_CMD_NAME).build();
+    public static final Command STATUS_COMMAND = Command.create().command(STATUS_CMD_NAME).build();
 
     private String command;
     private String user;
