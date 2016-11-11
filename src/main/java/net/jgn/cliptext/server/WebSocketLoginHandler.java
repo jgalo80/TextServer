@@ -14,11 +14,12 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.cookie.DefaultCookie;
+import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.netty.handler.codec.http.multipart.Attribute;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import io.netty.handler.ssl.SslHandler;
 import io.netty.util.CharsetUtil;
 import net.jgn.cliptext.crypt.PasswordHasher;
 import net.jgn.cliptext.crypt.SHA1PasswordHasher;
@@ -44,6 +45,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     private NettyHttpFileHandler httpFileHandler = new NettyHttpFileHandler();
 
     private PasswordHasher passwordHasher = new SHA1PasswordHasher();
+    private UserCookieManager userCookieManager = new UserCookieManager();
 
     private final SqlSessionFactory sqlSessionFactory;
 
@@ -62,7 +64,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         // If you're going to do normal HTTP POST authentication before upgrading the
         // WebSocket, the recommendation is to handle it right here
         if (req.method() == HttpMethod.POST) {
-            if (req.uri().equals("/register")) {
+            if (req.uri().equals("/signup")) {
                 signup(ctx, req);
             } else if (req.uri().equals("/login")) {
                 login(ctx, req);
@@ -74,7 +76,11 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
 
         // Allow only GET methods.
         if (req.method() != GET) {
-            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, FORBIDDEN));
+            if (req.uri().equals("/auth")) {
+                auth(ctx, req);
+            } else {
+                sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, FORBIDDEN));
+            }
             return;
         }
 
@@ -99,6 +105,38 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         logger.error("Error en WebSocketLoginHandler", cause);
         ctx.close();
+    }
+
+    /**
+     * Client needs to make a get request to /auth to performs cookie authorization.
+     * If the cookie doesn't exist or is invalid the server redirects to /login
+     * @param ctx
+     * @param req
+     */
+    private void auth(ChannelHandlerContext ctx, FullHttpRequest req) {
+        String cookieHeader = req.headers().get(HttpHeaderNames.COOKIE);
+        boolean userCookieValid = false;
+
+        if (cookieHeader != null) {
+            String user = userCookieManager.retrieveCryptedUserCookie(cookieHeader);
+            if (user != null) {
+                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+
+                boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
+                // Update the cookie
+                Cookie cryptedUserCookie = userCookieManager.createCryptedUserCookie(user, isSecure);
+                Cookie clearUserCookie = userCookieManager.createClearUserCookie(user);
+                response.headers().set(HttpHeaderNames.SET_COOKIE,
+                        ServerCookieEncoder.STRICT.encode(cryptedUserCookie, clearUserCookie));
+
+                // Close the connection as soon as the error message is sent.
+                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+                userCookieValid = true;
+            }
+        }
+        if (!userCookieValid) {
+            sendRedirect(ctx, "/login");
+        }
     }
 
     /**
@@ -127,7 +165,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
 
         } else {
-            httpFileHandler.sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR);
+            sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -148,25 +186,26 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             User user = retrieveUser(loginUser);
             if (user == null) {
                 logger.error("[/login] User not registered: {}", loginUser);
-                httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                sendError(ctx, HttpResponseStatus.FORBIDDEN);
 
             } else {
                 if (passwordHasher.checkPassword(password, user.getHashPassword())) {
                     logger.info("[/login] User logged in: {}", loginUser);
                     FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-                    DefaultCookie userCookie = new DefaultCookie("USER", loginUser);
+                    boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
+                    Cookie userCookie = userCookieManager.createCryptedUserCookie(loginUser, isSecure);
                     response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(userCookie));
 
                     // Close the connection as soon as the error message is sent.
                     ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
                 } else {
                     logger.error("[/login] Hash password doesn't match for user: {} - {}", loginUser, user.getHashPassword());
-                    httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                    sendError(ctx, HttpResponseStatus.FORBIDDEN);
                 }
             }
         } else {
             logger.error("[/login] User and/or password not provided");
-            httpFileHandler.sendError(ctx, HttpResponseStatus.FORBIDDEN);
+            sendError(ctx, HttpResponseStatus.FORBIDDEN);
         }
     }
 
@@ -220,4 +259,20 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         }
     }
 
+    private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
+        FullHttpResponse response = new DefaultFullHttpResponse(
+                HTTP_1_1, status, Unpooled.copiedBuffer("Failure: " + status + "\r\n", CharsetUtil.UTF_8));
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+
+        // Close the connection as soon as the error message is sent.
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendRedirect(ChannelHandlerContext ctx, String newUri) {
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, HttpResponseStatus.FOUND);
+        response.headers().set(HttpHeaderNames.LOCATION, newUri);
+
+        // Close the connection as soon as the error message is sent.
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
 }

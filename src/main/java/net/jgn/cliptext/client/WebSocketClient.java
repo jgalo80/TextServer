@@ -2,6 +2,7 @@ package net.jgn.cliptext.client;
 
 import com.google.gson.Gson;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
@@ -10,10 +11,14 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.PingWebSocketFrame;
@@ -30,6 +35,7 @@ import javax.net.ssl.TrustManagerFactory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.util.Date;
 
 /**
@@ -128,6 +134,8 @@ public final class WebSocketClient {
                 String msg = console.readLine();
                 if (msg == null) {
                     break;
+                } else if (msg.toLowerCase().startsWith("signup")) {
+                    signup(msg, ch);
                 } else if ("bye".equals(msg.toLowerCase())) {
                     ch.writeAndFlush(new CloseWebSocketFrame());
                     ch.closeFuture().sync();
@@ -163,6 +171,24 @@ public final class WebSocketClient {
             }
         } finally {
             group.shutdownGracefully();
+        }
+    }
+
+    private static void signup(String msg, Channel channel) {
+        String[] params = msg.split("\\s");
+        if (params.length == 3) {
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/signup");
+            //request.headers().set(HttpHeaderNames.HOST, host);
+            request.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
+            request.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP);
+            request.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/x-www-form-urlencoded");
+            String postData = "user=" + params[1] + "&passwd=" + params[2];
+            ByteBuf buf = request.content();
+            buf.setCharSequence(0, postData, Charset.defaultCharset());
+            request.headers().set(HttpHeaderNames.CONTENT_LENGTH, buf.readableBytes());
+            channel.writeAndFlush(request);
+        } else {
+            System.err.println("[signup] Wrong params: " + msg);
         }
     }
 }

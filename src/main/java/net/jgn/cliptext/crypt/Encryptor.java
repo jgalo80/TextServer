@@ -1,5 +1,8 @@
 package net.jgn.cliptext.crypt;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -10,6 +13,8 @@ import java.util.UUID;
  * @author jose
  */
 public class Encryptor {
+
+    private static final Logger logger = LoggerFactory.getLogger(Encryptor.class);
 
     public static String encrypt(String key, String value) {
         try {
@@ -23,7 +28,7 @@ public class Encryptor {
             byte[] encrypted = cipher.doFinal(value.getBytes());
             return initVector + Base64.getEncoder().encodeToString(encrypted);
         } catch (Exception ex) {
-            ex.printStackTrace();
+            logger.error("Error encrypting text [{}]", value);
         }
 
         return null;
@@ -47,7 +52,7 @@ public class Encryptor {
 
             return new String(original);
         } catch (Exception ex) {
-            ex.printStackTrace();
+            logger.error("Error decrypting text [{}]", encrypted);
         }
         return null;
     }

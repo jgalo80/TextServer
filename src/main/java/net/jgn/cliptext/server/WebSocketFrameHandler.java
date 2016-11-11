@@ -7,8 +7,6 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.ChannelMatchers;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.cookie.Cookie;
-import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -18,8 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +30,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
     // stateless JSON serializer/deserializer
     private Gson gson = new Gson();
+    private UserCookieManager userCookieManager = new UserCookieManager();
     private String user = null;
 
     @Override
@@ -46,13 +43,8 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
             String cookieHeader = handshake.requestHeaders().get(HttpHeaderNames.COOKIE);
             if (cookieHeader != null) {
-                Set<Cookie> cookies = ServerCookieDecoder.STRICT.decode(cookieHeader);
-                Optional<String> userCookie = cookies.stream()
-                        .filter(cookie -> "USER".equals(cookie.name()))
-                        .map(Cookie::value)
-                        .findFirst();
-                if (userCookie.isPresent()) {
-                    user = userCookie.get();
+                user = userCookieManager.retrieveCryptedUserCookie(cookieHeader);
+                if (user != null) {
                     ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
                     if (cg == null) {
                         cg = USER_CHANNELS.get(user);
@@ -108,7 +100,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        logger.error("Error en el handler", cause);
+        logger.error("Error in websocket handler", cause);
         super.exceptionCaught(ctx, cause);
     }
 }

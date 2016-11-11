@@ -29,7 +29,6 @@ public interface UserRepository {
     void createUserNameIndex();
 
     @Insert("INSERT INTO APP_USER (USER_NAME, HASH_PASSWORD) VALUES (#{userName}, #{hashPassword})")
-    //@Options(useGeneratedKeys=true, keyColumn="id")
     @SelectKey(statement = "values IDENTITY_VAL_LOCAL()", keyProperty = "id", resultType=Integer.class, before = false)
     void insertUser(User user);
 }
