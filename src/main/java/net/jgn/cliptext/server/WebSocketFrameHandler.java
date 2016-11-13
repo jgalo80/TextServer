@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -41,9 +42,12 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
             logger.info("Handshake completed. Adding channel to ALL_CHANNELS");
             ALL_CHANNELS.add(ctx.channel());
 
-            String cookieHeader = handshake.requestHeaders().get(HttpHeaderNames.COOKIE);
-            if (cookieHeader != null) {
-                user = userCookieManager.retrieveCryptedUserCookie(cookieHeader);
+            Optional<String> uidCookieHeader = handshake.requestHeaders().getAll(HttpHeaderNames.COOKIE).stream()
+                    .filter(c -> c.startsWith("UID="))
+                    .findFirst();
+
+            if (uidCookieHeader.isPresent()) {
+                user = userCookieManager.retrieveCryptedUserCookie(uidCookieHeader.get());
                 if (user != null) {
                     ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
                     if (cg == null) {

@@ -74,8 +74,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
             return;
         }
 
-        // Allow only GET methods.
-        if (req.method() != GET) {
+        if (req.method() == HttpMethod.GET) {
             if (req.uri().equals("/auth")) {
                 auth(ctx, req);
             } else {
@@ -118,23 +117,28 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         boolean userCookieValid = false;
 
         if (cookieHeader != null) {
+            logger.info("[/auth] Authenticating by cookie");
             String user = userCookieManager.retrieveCryptedUserCookie(cookieHeader);
             if (user != null) {
+                logger.info("[/auth] User retrieved from UID cookie: {}", user);
                 FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
 
                 boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
                 // Update the cookie
                 Cookie cryptedUserCookie = userCookieManager.createCryptedUserCookie(user, isSecure);
                 Cookie clearUserCookie = userCookieManager.createClearUserCookie(user);
-                response.headers().set(HttpHeaderNames.SET_COOKIE,
-                        ServerCookieEncoder.STRICT.encode(cryptedUserCookie, clearUserCookie));
+                response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(cryptedUserCookie));
+                response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(clearUserCookie));
 
                 // Close the connection as soon as the error message is sent.
                 ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
                 userCookieValid = true;
+            } else {
+                logger.warn("[/auth] UID cookie doesn't exist");
             }
         }
         if (!userCookieValid) {
+            logger.warn("[/auth] Redirecting to /login");
             sendRedirect(ctx, "/login");
         }
     }

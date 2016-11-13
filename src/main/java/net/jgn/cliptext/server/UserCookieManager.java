@@ -47,6 +47,7 @@ public class UserCookieManager {
     public Cookie createCryptedUserCookie(String user, boolean secure) {
         String encryptedUser = Encryptor.encrypt(System.getProperty(KEY_PROPERTY_NAME), user);
         DefaultCookie userCookie = new DefaultCookie(CRYPTED_USERID_COOKIE, encryptedUser);
+        userCookie.setPath("/");
         userCookie.setSecure(secure);
         if (secure) {
             userCookie.setMaxAge(TimeUnit.DAYS.toSeconds(14));
@@ -61,7 +62,7 @@ public class UserCookieManager {
      */
     public Cookie createClearUserCookie(String user) {
         Cookie cookie = new DefaultCookie(CLEAR_USER_COOKIE, user);
-        cookie.setMaxAge(-1);
+        cookie.setPath("/");
         return cookie;
     }
 }
