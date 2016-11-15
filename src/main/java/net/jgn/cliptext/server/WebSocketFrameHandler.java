@@ -1,12 +1,14 @@
 package net.jgn.cliptext.server;
 
 import com.google.gson.Gson;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.ChannelMatchers;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -20,7 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Echoes uppercase content of text frames.
+ * Handler of websocket frames
  */
 public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
 
@@ -39,7 +41,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
             WebSocketServerProtocolHandler.HandshakeComplete handshake = (WebSocketServerProtocolHandler.HandshakeComplete) evt;
             logger.info("Handshake completed. URI: {}", handshake.requestUri());
-            logger.info("Handshake completed. Adding channel to ALL_CHANNELS");
+            logger.info("Adding channel {} to ALL_CHANNELS", ctx.channel());
             ALL_CHANNELS.add(ctx.channel());
 
             Optional<String> uidCookieHeader = handshake.requestHeaders().getAll(HttpHeaderNames.COOKIE).stream()
@@ -54,8 +56,14 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
                         cg = USER_CHANNELS.get(user);
                     }
                     cg.add(ctx.channel());
-                    logger.info("Handshake completed. Adding channel to USER_CHANNELS[{}]", user);
+                    logger.info("Adding channel {} to USER_CHANNELS[{}]", ctx.channel(), user);
                 }
+            }
+
+            if (user == null) {
+                // Close the channel from the server
+                logger.warn("Cannot retrieve user from cookie. Closing channel {}", ctx.channel());
+                ctx.channel().writeAndFlush(new CloseWebSocketFrame()).addListener(ChannelFutureListener.CLOSE);
             }
         }
         super.userEventTriggered(ctx, evt);
@@ -67,7 +75,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
         if (frame instanceof TextWebSocketFrame) {
             String frameText = ((TextWebSocketFrame) frame).text();
-            logger.info("received ws frame [{}]", frameText);
+            logger.info("Received websocket frame [{}], channel {}", frameText, ctx.channel());
 
             Command command = gson.fromJson(frameText, Command.class);
             if (command == null) {
@@ -104,7 +112,7 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        logger.error("Error in websocket handler", cause);
+        logger.error("Error in websocket handler in channel {}", ctx.channel(), cause);
         super.exceptionCaught(ctx, cause);
     }
 }

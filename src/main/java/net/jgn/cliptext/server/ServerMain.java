@@ -8,13 +8,13 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
- * Main. Spring bootstraping. Starts the server.
+ * ServerMain. Spring bootstraping. Starts the server.
  *
  * TODO: Add JMX support (jolokia) to stop de server
  */
-public class Main {
+public class ServerMain {
 
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Logger logger = LoggerFactory.getLogger(ServerMain.class);
 
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : "localhost";

@@ -64,8 +64,9 @@ public class HttpAuthStage {
                         .add("passwd", commandArgs.get(2))
                         .build();
                 Request request = new Request.Builder().url(baseUrl + "/signup").post(requestBody).build();
+                Response response = null;
                 try {
-                    Response response = client.newCall(request).execute();
+                    response = client.newCall(request).execute();
                     if (response.isSuccessful()) {
                         logger.info("[signup] User registered {}", commandArgs.get(1));
                     } else {
@@ -73,6 +74,10 @@ public class HttpAuthStage {
                     }
                 } catch (IOException e) {
                     logger.error("[signup] Error making request", e);
+                } finally {
+                    if (response != null) {
+                        response.close();
+                    }
                 }
                 return true;
             }
@@ -85,17 +90,22 @@ public class HttpAuthStage {
                         .add("passwd", commandArgs.get(2))
                         .build();
                 Request request = new Request.Builder().url(baseUrl + "/login").post(requestBody).build();
+                Response response = null;
                 try {
-                    Response response = client.newCall(request).execute();
+                    response = client.newCall(request).execute();
                     if (response.isSuccessful()) {
                         logger.info("[login] User logged {}", commandArgs.get(1));
-                        cookieManager.getCookieStore().getCookies().stream()
+                        cookieManager.getCookieStore().getCookies()
                                 .forEach(c -> logger.info("[login] cookie {}", c));
                     } else {
                         logger.warn("[login] Error registering user {}", commandArgs.get(1));
                     }
                 } catch (IOException e) {
                     logger.error("[login] Error making request", e);
+                } finally {
+                    if (response != null) {
+                        response.close();
+                    }
                 }
                 return true;
             }
@@ -105,8 +115,9 @@ public class HttpAuthStage {
             public boolean execCommand(List<String> commandArgs) {
                 boolean continueLoop = true;
                 Request request = new Request.Builder().url(baseUrl + "/auth").build();
+                Response response = null;
                 try {
-                    Response response = client.newCall(request).execute();
+                    response = client.newCall(request).execute();
                     if (response.isSuccessful()) {
                         if (response.isRedirect()) {
                             logger.warn("[auth] UID cookie doesn't exist or is invalid");
@@ -114,7 +125,7 @@ public class HttpAuthStage {
                         } else {
                             continueLoop = false;
                             logger.info("[auth] UID auth cookie is valid");
-                            cookieManager.getCookieStore().getCookies().stream()
+                            cookieManager.getCookieStore().getCookies()
                                     .forEach(c -> logger.info("[auth] cookie {}", c));
                             authenticated = true;
                         }
@@ -123,6 +134,10 @@ public class HttpAuthStage {
                     }
                 } catch (IOException e) {
                     logger.error("[auth] Error making request", e);
+                } finally {
+                    if (response != null) {
+                        response.close();
+                    }
                 }
                 return continueLoop;
             }
@@ -144,7 +159,7 @@ public class HttpAuthStage {
     public String getAuthenticatedUser() {
         Optional<String> userCookie = cookieManager.getCookieStore().getCookies().stream()
                 .filter(c -> c.getName().equals("USER"))
-                .map(c -> c.getValue())
+                .map(HttpCookie::getValue)
                 .findFirst();
         return userCookie.orElse(null);
     }
@@ -152,7 +167,7 @@ public class HttpAuthStage {
     public String getAuthenticatedUid() {
         Optional<String> uidCookie = cookieManager.getCookieStore().getCookies().stream()
                 .filter(c -> c.getName().equals("UID"))
-                .map(c -> c.getValue())
+                .map(HttpCookie::getValue)
                 .findFirst();
         return uidCookie.orElse(null);
     }

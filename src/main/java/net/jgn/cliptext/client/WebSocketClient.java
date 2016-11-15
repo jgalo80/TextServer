@@ -58,7 +58,7 @@ public final class WebSocketClient {
     private static final String LETSENCRYPT_AUTH_X4_FINGERPRINT = "C0:5E:24:71:E5:89:A5:70:53:F2:74:7E:E0:6A:59:3C:51:3E:23:A5";
 
     /**
-     * Main
+     * ServerMain
      * @param args
      * @throws Exception
      */
