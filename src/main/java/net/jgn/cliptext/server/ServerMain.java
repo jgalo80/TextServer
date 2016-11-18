@@ -9,8 +9,6 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 /**
  * ServerMain. Spring bootstraping. Starts the server.
- *
- * TODO: Add JMX support (jolokia) to stop de server
  */
 public class ServerMain {
 

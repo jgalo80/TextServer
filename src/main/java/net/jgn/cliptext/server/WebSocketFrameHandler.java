@@ -8,6 +8,7 @@ import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.ChannelMatchers;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketFrame;
@@ -18,7 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -31,43 +32,64 @@ public class WebSocketFrameHandler extends SimpleChannelInboundHandler<WebSocket
     private static Map<String, ChannelGroup> USER_CHANNELS = new ConcurrentHashMap<>();
     private static ChannelGroup ALL_CHANNELS = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
+    private final SessionManager sessionManager;
+
     // stateless JSON serializer/deserializer
     private Gson gson = new Gson();
-    private UserCookieManager userCookieManager = new UserCookieManager();
+    private CookieManager cookieManager = new CookieManager();
     private String user = null;
+
+    public WebSocketFrameHandler(SessionManager sessionManager) {
+        this.sessionManager = sessionManager;
+    }
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
             WebSocketServerProtocolHandler.HandshakeComplete handshake = (WebSocketServerProtocolHandler.HandshakeComplete) evt;
-            logger.info("Handshake completed. URI: {}", handshake.requestUri());
-            logger.info("Adding channel {} to ALL_CHANNELS", ctx.channel());
-            ALL_CHANNELS.add(ctx.channel());
 
-            Optional<String> uidCookieHeader = handshake.requestHeaders().getAll(HttpHeaderNames.COOKIE).stream()
-                    .filter(c -> c.startsWith("UID="))
-                    .findFirst();
+            Set<Cookie> cookies = cookieManager.extractCookies(handshake.requestHeaders().getAll(HttpHeaderNames.COOKIE));
+            String encryptedUserId = cookieManager.retrieveCryptedUserIdCookie(cookies);
+            boolean userValidated = false;
 
-            if (uidCookieHeader.isPresent()) {
-                user = userCookieManager.retrieveCryptedUserCookie(uidCookieHeader.get());
+            if (encryptedUserId != null) {
+                user = cookieManager.decryptUserId(encryptedUserId);
                 if (user != null) {
-                    ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
-                    if (cg == null) {
-                        cg = USER_CHANNELS.get(user);
+                    Session session = sessionManager.retrieveSessionFromCookies(cookies);
+                    if (session == null) {
+                        logger.warn("[handshake completed] There is no session for user {} !!", user);
+                    } else if (!user.equals(session.get("USER"))) {
+                        logger.warn("[handshake completed] User from the cookie UID is not the same that the one got from the session [{} != {}] !!",
+                                user, session.get("USER"));
+                    } else {
+                        logger.info("[handshake completed] Adding channel {} to ALL_CHANNELS", ctx.channel());
+                        ALL_CHANNELS.add(ctx.channel());
+
+                        ChannelGroup cg = USER_CHANNELS.putIfAbsent(user, new DefaultChannelGroup(GlobalEventExecutor.INSTANCE));
+                        if (cg == null) {
+                            cg = USER_CHANNELS.get(user);
+                        }
+                        cg.add(ctx.channel());
+                        logger.info("[handshake completed] Adding channel {} to USER_CHANNELS[{}]", ctx.channel(), user);
+                        userValidated = true;
                     }
-                    cg.add(ctx.channel());
-                    logger.info("Adding channel {} to USER_CHANNELS[{}]", ctx.channel(), user);
+                } else {
+                    logger.warn("[handshake completed] Can't decrypt UID cookie (manipulated?): [{}]", encryptedUserId);
                 }
+            } else {
+                logger.warn("[handshake completed] UID cookie doesn't exist");
             }
 
-            if (user == null) {
+            if (!userValidated) {
                 // Close the channel from the server
-                logger.warn("Cannot retrieve user from cookie. Closing channel {}", ctx.channel());
+                logger.warn("[handshake completed] Error validating the user after handshake. Closing channel {}", ctx.channel());
                 ctx.channel().writeAndFlush(new CloseWebSocketFrame()).addListener(ChannelFutureListener.CLOSE);
             }
         }
         super.userEventTriggered(ctx, evt);
     }
+
+
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WebSocketFrame frame) throws Exception {

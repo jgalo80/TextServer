@@ -31,8 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Set;
 
-import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
@@ -45,12 +45,14 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     private NettyHttpFileHandler httpFileHandler = new NettyHttpFileHandler();
 
     private PasswordHasher passwordHasher = new SHA1PasswordHasher();
-    private UserCookieManager userCookieManager = new UserCookieManager();
+    private CookieManager cookieManager = new CookieManager();
 
     private final SqlSessionFactory sqlSessionFactory;
+    private final SessionManager sessionManager;
 
-    public WebSocketLoginHandler(SqlSessionFactory sqlSessionFactory) {
+    public WebSocketLoginHandler(SqlSessionFactory sqlSessionFactory, SessionManager sessionManager) {
         this.sqlSessionFactory = sqlSessionFactory;
+        this.sessionManager = sessionManager;
     }
 
     @Override
@@ -75,8 +77,8 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         }
 
         if (req.method() == HttpMethod.GET) {
-            if (req.uri().equals("/auth")) {
-                auth(ctx, req);
+            if (req.uri().equals("/login")) {
+                login(ctx, req);
             } else {
                 sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, FORBIDDEN));
             }
@@ -107,43 +109,6 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
     }
 
     /**
-     * Client needs to make a get request to /auth to performs cookie authorization.
-     * If the cookie doesn't exist or is invalid the server redirects to /login
-     * @param ctx
-     * @param req
-     */
-    private void auth(ChannelHandlerContext ctx, FullHttpRequest req) {
-        String cookieHeader = req.headers().get(HttpHeaderNames.COOKIE);
-        boolean userCookieValid = false;
-
-        if (cookieHeader != null) {
-            logger.info("[/auth] Authenticating by cookie");
-            String user = userCookieManager.retrieveCryptedUserCookie(cookieHeader);
-            if (user != null) {
-                logger.info("[/auth] User retrieved from UID cookie: {}", user);
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-
-                boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
-                // Update the cookie
-                Cookie cryptedUserCookie = userCookieManager.createCryptedUserCookie(user, isSecure);
-                Cookie clearUserCookie = userCookieManager.createClearUserCookie(user);
-                response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(cryptedUserCookie));
-                response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(clearUserCookie));
-
-                // Close the connection as soon as the error message is sent.
-                ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-                userCookieValid = true;
-            } else {
-                logger.warn("[/auth] UID cookie doesn't exist");
-            }
-        }
-        if (!userCookieValid) {
-            logger.warn("[/auth] Redirecting to /login");
-            sendRedirect(ctx, "/login");
-        }
-    }
-
-    /**
      * Register the user in the system
      * @param ctx
      * @param req
@@ -156,7 +121,7 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
         decoder.destroy();
 
         if (loginUser != null && password != null) {
-            logger.info("[/signup] Registering user: {}", loginUser);
+            logger.info("[/signup] Registering user: {}. Channel: {}", loginUser, ctx.channel());
             if (retrieveUser(loginUser) != null) {
                 logger.warn("[/signup] user {} already registered. ", loginUser);
             } else {
@@ -180,37 +145,80 @@ public class WebSocketLoginHandler extends SimpleChannelInboundHandler<FullHttpR
      * @throws IOException
      */
     private void login(ChannelHandlerContext ctx, FullHttpRequest req) throws IOException {
-        HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(req);
-        String loginUser = getPostAttribute(decoder, "user");
-        String password = getPostAttribute(decoder, "passwd");
-        decoder.destroy();
+        Set<Cookie> cookies = cookieManager.extractCookies(req.headers().getAll(HttpHeaderNames.COOKIE));
+        Session session = sessionManager.retrieveSessionFromCookies(cookies);
+        boolean tryByCredentials = false;
 
-        if (loginUser != null && password != null) {
-            logger.info("[/login] Authenticating user: {}", loginUser);
-            User user = retrieveUser(loginUser);
-            if (user == null) {
-                logger.error("[/login] User not registered: {}", loginUser);
-                sendError(ctx, HttpResponseStatus.FORBIDDEN);
-
-            } else {
-                if (passwordHasher.checkPassword(password, user.getHashPassword())) {
-                    logger.info("[/login] User logged in: {}", loginUser);
-                    FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-                    boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
-                    Cookie userCookie = userCookieManager.createCryptedUserCookie(loginUser, isSecure);
-                    response.headers().set(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(userCookie));
-
-                    // Close the connection as soon as the error message is sent.
-                    ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-                } else {
-                    logger.error("[/login] Hash password doesn't match for user: {} - {}", loginUser, user.getHashPassword());
+        String encryptedUserId = cookieManager.retrieveCryptedUserIdCookie(cookies);
+        if (encryptedUserId != null) {
+            String user = cookieManager.decryptUserId(encryptedUserId);
+            if (user != null) {
+                logger.info("[/login] Trying authentication by cookie. User: {}", user);
+                if (retrieveUser(user) == null) {
+                    logger.warn("[/login] User retrieved by cookie doesn't exists on user store: {}", user);
                     sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                } else {
+                    FullHttpResponse response = createResponseOkWithCookies(ctx, user);
+                    if (session == null) {
+                        session = sessionManager.createNewSession(response);
+                        session.put("USER", user);
+                    }
+                    ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
                 }
+            } else {
+                logger.warn("[/login] Authentication cookie (UID) is invalid (manipulated?): {}", encryptedUserId);
+                sendError(ctx, HttpResponseStatus.FORBIDDEN);
             }
         } else {
-            logger.error("[/login] User and/or password not provided");
-            sendError(ctx, HttpResponseStatus.FORBIDDEN);
+            tryByCredentials = true;
+            logger.warn("[/login] Authentication cookie (UID) doesn't exist");
         }
+
+        if (req.method() == HttpMethod.POST && tryByCredentials) {
+            HttpPostRequestDecoder decoder = new HttpPostRequestDecoder(req);
+            String loginUser = getPostAttribute(decoder, "user");
+            String password = getPostAttribute(decoder, "passwd");
+            decoder.destroy();
+
+            if (loginUser != null && password != null) {
+                logger.info("[/login] Authenticating user by credentials: {}. Channel: {}", loginUser, ctx.channel());
+                User user = retrieveUser(loginUser);
+                if (user == null) {
+                    logger.error("[/login] User not registered: {}", loginUser);
+                    sendError(ctx, HttpResponseStatus.FORBIDDEN);
+
+                } else {
+                    if (passwordHasher.checkPassword(password, user.getHashPassword())) {
+                        logger.info("[/login] User logged in: {}", loginUser);
+                        FullHttpResponse response = createResponseOkWithCookies(ctx, loginUser);
+                        if (session == null) {
+                            session = sessionManager.createNewSession(response);
+                            session.put("USER", loginUser);
+                        }
+                        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+                    } else {
+                        logger.error("[/login] Hash password doesn't match for user: {} - {}", loginUser, user.getHashPassword());
+                        sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                    }
+                }
+            } else {
+                logger.error("[/login] User and/or password not provided");
+                sendError(ctx, HttpResponseStatus.FORBIDDEN);
+            }
+        }
+    }
+
+
+    private FullHttpResponse createResponseOkWithCookies(ChannelHandlerContext ctx, String user) {
+        FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+
+        boolean isSecure = ctx.pipeline().get(SslHandler.class) != null;
+        // Update the cookie
+        Cookie cryptedUserCookie = cookieManager.createCryptedUserCookie(user, isSecure);
+        Cookie clearUserCookie = cookieManager.createClearUserCookie(user);
+        response.headers().add(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(cryptedUserCookie));
+        response.headers().add(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.STRICT.encode(clearUserCookie));
+        return response;
     }
 
     private String getPostAttribute(HttpPostRequestDecoder decoder, String attrName) throws IOException {

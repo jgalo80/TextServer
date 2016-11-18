@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 
 /**
  * @author jose
@@ -29,14 +28,15 @@ public class ClientMain {
             httpAuthStage.loop();
 
             if (httpAuthStage.isAuthenticated()) {
-                String user = httpAuthStage.getAuthenticatedUser();
                 String uid = httpAuthStage.getAuthenticatedUid();
+                String user = httpAuthStage.getAuthenticatedUser();
+                String sessionId = httpAuthStage.getSessionId();
                 String wsUrl = "wss".equalsIgnoreCase(scheme) ?
                         url.replace("https://", "wss://") : url.replace("http://", "ws://");
                 wsUrl = wsUrl + "/websocket";
 
-                logger.info("Entering websocket stage. Type 'connect' to open a connection with {} [{}]", wsUrl, user);
-                WebSocketStage webSocketStage = new WebSocketStage(wsUrl, user, uid);
+                logger.info("Entering websocket stage. Type 'connect' to open a connection with {}", wsUrl);
+                WebSocketStage webSocketStage = new WebSocketStage(wsUrl, sessionId, user, uid);
                 webSocketStage.loop();
             }
 

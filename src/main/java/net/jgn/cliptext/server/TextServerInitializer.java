@@ -10,7 +10,6 @@ import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketSe
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import org.apache.ibatis.session.SqlSessionFactory;
-import org.springframework.stereotype.Component;
 
 /**
  * @author jose
@@ -20,11 +19,14 @@ public class TextServerInitializer extends ChannelInitializer<SocketChannel> {
     private final SslContext sslContext;
     private final String websocketPath;
     private final SqlSessionFactory sqlSessionFactory;
+    private final SessionManager sessionManager;
 
-    public TextServerInitializer(SqlSessionFactory sqlSessionFactory, SslContext sslContext, String websocketPath) {
+    public TextServerInitializer(SqlSessionFactory sqlSessionFactory, SslContext sslContext,
+                                 SessionManager sessionManager, String websocketPath) {
         this.sslContext = sslContext;
-        this.websocketPath = websocketPath;
         this.sqlSessionFactory = sqlSessionFactory;
+        this.sessionManager = sessionManager;
+        this.websocketPath = websocketPath;
     }
 
     @Override
@@ -38,8 +40,8 @@ public class TextServerInitializer extends ChannelInitializer<SocketChannel> {
         p.addLast(new ChunkedWriteHandler());
         p.addLast(new WebSocketServerCompressionHandler());
         p.addLast(new WebSocketServerProtocolHandler(websocketPath, null, true));
-        p.addLast(new WebSocketLoginHandler(sqlSessionFactory));
-        p.addLast(new WebSocketFrameHandler());
+        p.addLast(new WebSocketLoginHandler(sqlSessionFactory, sessionManager));
+        p.addLast(new WebSocketFrameHandler(sessionManager));
     }
 
 }

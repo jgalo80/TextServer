@@ -21,6 +21,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketVersion;
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import net.jgn.cliptext.cmdline.AbstractMatchCommandProcessor;
 import net.jgn.cliptext.cmdline.AbstractStartsWithCommandProcessor;
 import net.jgn.cliptext.cmdline.ConsoleInputLoop;
@@ -48,15 +49,17 @@ public final class WebSocketStage {
 
     private String url;
     private String user;
+    private String sessionId;
     private String uid;
 
     private EventLoopGroup clientEventLoopGroup;
     private Channel clientChannel;
     private Gson gson = new Gson();
 
-    public WebSocketStage(String url, String user, String uid) {
+    public WebSocketStage(String url, String sessionId, String user, String uid) {
         this.url = url;
         this.user = user;
+        this.sessionId = sessionId;
         this.uid = uid;
     }
 
@@ -84,11 +87,16 @@ public final class WebSocketStage {
                     final int port = uri.getPort() == -1 ? (ssl ? 443 : 80) : uri.getPort();
                     final SslContext sslCtx;
                     if (ssl) {
-                        String certDN = System.getProperty("certDN");
-                        TrustManagerFactory trustManagerFactory = new CAFingerprintTrustManagerFactory(certDN,
-                                LETSENCRYPT_AUTH_X3_FINGERPRINT,
-                                LETSENCRYPT_AUTH_X4_FINGERPRINT,
-                                ISRG_ROOT_X1_FINGERPRINT);
+                        TrustManagerFactory trustManagerFactory;
+                        if (port == 443) {
+                            String certDN = System.getProperty("certDN");
+                            trustManagerFactory = new CAFingerprintTrustManagerFactory(certDN,
+                                    LETSENCRYPT_AUTH_X3_FINGERPRINT,
+                                    LETSENCRYPT_AUTH_X4_FINGERPRINT);
+                        } else {
+                            // If port is not 443, the server is considered as a test environment
+                            trustManagerFactory = InsecureTrustManagerFactory.INSTANCE;
+                        }
                         sslCtx = SslContextBuilder.forClient().trustManager(trustManagerFactory).build();
                     } else {
                         sslCtx = null;
@@ -97,8 +105,9 @@ public final class WebSocketStage {
                     clientEventLoopGroup = new NioEventLoopGroup();
 
                     DefaultHttpHeaders customHeaders = new DefaultHttpHeaders();
-                    //customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", user));
+                    customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("_SSID_", sessionId));
                     customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("UID", uid));
+                    customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", user));
 
                     // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
                     // If you change it to V00, ping is not supported and remember to change
