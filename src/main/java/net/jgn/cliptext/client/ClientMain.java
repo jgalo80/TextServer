@@ -31,7 +31,7 @@ public class ClientMain {
                 String uid = httpAuthStage.getAuthenticatedUid();
                 String user = httpAuthStage.getAuthenticatedUser();
                 String sessionId = httpAuthStage.getSessionId();
-                String wsUrl = "wss".equalsIgnoreCase(scheme) ?
+                String wsUrl = "https".equalsIgnoreCase(scheme) ?
                         url.replace("https://", "wss://") : url.replace("http://", "ws://");
                 wsUrl = wsUrl + "/websocket";
 

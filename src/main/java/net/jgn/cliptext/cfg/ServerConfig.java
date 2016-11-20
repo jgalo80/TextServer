@@ -3,6 +3,7 @@ package net.jgn.cliptext.cfg;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import net.jgn.cliptext.server.SessionManager;
 import net.jgn.cliptext.server.SslContextWrapper;
 import net.jgn.cliptext.server.TextServerInitializer;

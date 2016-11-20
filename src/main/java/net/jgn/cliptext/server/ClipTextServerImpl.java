@@ -41,7 +41,7 @@ public class ClipTextServerImpl implements ClipTextServer {
         ServerBootstrap b = new ServerBootstrap();
         b.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .handler(new LoggingHandler(LogLevel.INFO))
+                .handler(new LoggingHandler(LogLevel.DEBUG))
                 .childHandler(textServerInitializer);
 
         try {

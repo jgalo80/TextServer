@@ -13,6 +13,9 @@ import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpObjectAggregator;
+import io.netty.handler.codec.http.cookie.ClientCookieEncoder;
+import io.netty.handler.codec.http.cookie.Cookie;
+import io.netty.handler.codec.http.cookie.DefaultCookie;
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
@@ -105,9 +108,12 @@ public final class WebSocketStage {
                     clientEventLoopGroup = new NioEventLoopGroup();
 
                     DefaultHttpHeaders customHeaders = new DefaultHttpHeaders();
-                    customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("_SSID_", sessionId));
-                    customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("UID", uid));
-                    customHeaders.add(HttpHeaderNames.COOKIE, ServerCookieEncoder.STRICT.encode("USER", user));
+                    Cookie sessionCookie = new DefaultCookie("_SSID_", sessionId);
+                    Cookie uidCookie = new DefaultCookie("UID", uid);
+                    Cookie userCookie = new DefaultCookie("USER", user);
+
+                    customHeaders.add(HttpHeaderNames.COOKIE,
+                            ClientCookieEncoder.STRICT.encode(sessionCookie, uidCookie, userCookie));
 
                     // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
                     // If you change it to V00, ping is not supported and remember to change
